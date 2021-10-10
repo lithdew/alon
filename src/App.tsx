@@ -36,6 +36,9 @@ import { useExampleCode, useSysroot } from "./useAlon";
 import { LogProvider, useLogs } from "./Log";
 import { RefreshIcon, SaveIcon, TrashIcon } from "@heroicons/react/outline";
 
+import SHA from "jssha";
+import * as sha3 from "js-sha3";
+
 const App = () => {
   const wallets = useMemo(
     () => [
@@ -130,7 +133,7 @@ const Main = () => {
       return;
     }
     const changeModelHandler = editor.onDidChangeModel(event => {
-      editor.updateOptions({ readOnly: event.newModelUrl?.path.startsWith("/usr") || !event.newModelUrl?.path.endsWith(".c") });
+      // editor.updateOptions({ readOnly: event.newModelUrl?.path.startsWith("/usr") || !event.newModelUrl?.path.endsWith(".c") });
       setTree(null);
     });
     return () => {
@@ -298,11 +301,225 @@ const Main = () => {
 
     const linkResult = await compiler.linkBpf(linkerArgsList);
     if (!linkResult.success) {
-      log.write("compiler", "Error while compiling:");
+      log.write("compiler", "Error while linking:");
       log.write("compiler", linkResult.err);
       return;
     }
     log.write("compiler", `Successfully linked 'program.so'.`);
+
+    sync();
+  }, [log, editor, fs, sync, llvm, compiler, sysrootLoaded]);
+
+  const handleClickRunTests = useCallback(async () => {
+    if (!editor || !llvm || !fs || !compiler || !sysrootLoaded) {
+      return;
+    }
+
+    try {
+      fs.unlink("/project/test.o");
+    } catch { }
+
+    const sourceFileNames = Object.values((fs.lookupPath("/project", {}).node as any).contents)
+      .map((node: any) => fs.getPath(node))
+      .filter((path: string) => path.endsWith(".c"));
+
+    const compilerArgs = [
+      "-Werror",
+      "-O2",
+      "-fno-builtin",
+      "-std=c17",
+      "-isystem/usr/include/clang",
+      "-isystem/usr/include/solana",
+      "-mrelocation-model",
+      "pic",
+      "-pic-level",
+      "2",
+      "-emit-obj",
+      "-I/project/",
+      "-triple",
+      "wasm32-unknown-unknown",
+      "-DALON_TEST",
+      "-o",
+      "/project/test.o",
+    ]
+
+    for (const sourceFileName of sourceFileNames) {
+      compilerArgs.push(sourceFileName);
+    }
+
+    const compilerArgsList = new llvm.StringList();
+    compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
+
+    log.write("compiler", "Compiling tests with arguments:")
+    log.write("compiler", compilerArgs);
+
+    const compileResult = await compiler.compile(compilerArgsList);
+    if (!compileResult.success) {
+      log.write("compiler", "Error while compiling tests:");
+      log.write("compiler", compileResult.diags);
+      return;
+    }
+
+    try {
+      fs.unlink("/project/test.wasm");
+    } catch { }
+
+    log.write("compiler", `Successfully compiled 'test.o'.`);
+
+    const linkerArgs = [
+      "--no-entry",
+      "--import-memory",
+      "--export-all",
+      "--allow-undefined",
+      "-o",
+      "/project/test.wasm",
+      "/project/test.o",
+    ];
+
+    const linkerArgsList = new llvm.StringList();
+    linkerArgs.forEach(arg => linkerArgsList.push_back(arg));
+
+    log.write("compiler", "Linking tests with arguments:");
+    log.write("compiler", linkerArgs);
+
+    const linkResult = await compiler.linkWasm(linkerArgsList);
+    if (!linkResult.success) {
+      log.write("compiler", "Error while linking tests:");
+      log.write("compiler", linkResult.err);
+      return;
+    }
+    log.write("compiler", `Successfully linked 'test.wasm'.`);
+
+    const bytes = fs.readFile("/project/test.wasm");
+
+    const memory = new WebAssembly.Memory({ initial: 2 });
+    const buffer = new Uint8Array(memory.buffer);
+
+    const slice = (ptr: number, len: number) => {
+      return buffer.slice(ptr, ptr + Number(len));
+    }
+
+    const blake3 = await import("blake3/browser");
+
+    const { instance } = await WebAssembly.instantiate(bytes, {
+      env: {
+        memory,
+        sol_panic_(file: number, len: number, line: number, column: number) {
+          throw new Error(`Panic in ${new TextDecoder().decode(slice(file, len))} at ${line}:${column}`);
+        },
+        sol_log_(ptr: number, len: number) {
+          log.write("compiler", `Program log: ${slice(ptr, len)}`);
+        },
+        sol_log_64_(a: number, b: number, c: number, d: number, e: number) {
+          log.write("compiler", `Program log: ${a}, ${b}, ${c}, ${d}, ${e}`);
+        },
+        sol_log_compute_units_() {
+          log.write("compiler", `Program consumption: __ units remaining`);
+        },
+        sol_log_pubkey(ptr: number) {
+          log.write("compiler", `Program log: ${new web3.PublicKey(slice(ptr, 32)).toBase58()}`);
+        },
+        sol_create_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number) {
+          let payload = Buffer.of();
+          for (let i = 0; i < seeds_len; i++) {
+            const view = new DataView(buffer.buffer, seeds + i * 16, 16);
+            payload = Buffer.concat([payload, Buffer.from(slice(view.getUint32(0, true), view.getUint32(8, true)))]);
+          }
+          payload = Buffer.concat([payload, Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
+
+          const hasher = new SHA("SHA-256", "UINT8ARRAY");
+          hasher.update(payload);
+
+          const hash = hasher.getHash("UINT8ARRAY");
+          if (web3.PublicKey.isOnCurve(hash)) {
+            return BigInt(1);
+          }
+
+          buffer.set(hash, program_address);
+
+          return BigInt(0);
+        },
+        sol_try_find_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number, bump_seed: number) {
+          for (let nonce = 255; nonce > 0; nonce--) {
+            let payload = Buffer.of();
+            for (let i = 0; i < seeds_len; i++) {
+              const view = new DataView(buffer.buffer, seeds + i * 16, 16);
+              payload = Buffer.concat([payload, Buffer.from(slice(view.getUint32(0, true), view.getUint32(8, true)))]);
+            }
+            payload = Buffer.concat([payload, Buffer.of(nonce), Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
+
+            const hasher = new SHA("SHA-256", "UINT8ARRAY");
+            hasher.update(payload);
+
+            const hash = hasher.getHash("UINT8ARRAY");
+            if (!web3.PublicKey.isOnCurve(hash)) {
+              buffer.set(hash, program_address);
+              buffer.set([nonce], bump_seed);
+              return BigInt(0);
+            }
+          }
+          return BigInt(1);
+        },
+        sol_sha256: (bytes: number, bytes_len: number, result_ptr: number) => {
+          const hasher = new SHA("SHA-256", "UINT8ARRAY");
+          for (let i = 0; i < bytes_len; i++) {
+            // A slice is assumed to be 16 bytes.
+            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+            // 8 is a 4-byte LE number depicting the slice's length.
+            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+          }
+
+          buffer.set(hasher.getHash("UINT8ARRAY"), result_ptr);
+          return BigInt(0);
+        },
+        sol_keccak256: (bytes: number, bytes_len: number, result_ptr: number) => {
+          const hasher = sha3.keccak256.create();
+          for (let i = 0; i < bytes_len; i++) {
+            // A slice is assumed to be 16 bytes.
+            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+            // 8 is a 4-byte LE number depicting the slice's length.
+            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+          }
+
+          buffer.set(hasher.digest(), result_ptr);
+          return BigInt(0);
+        },
+        sol_blake3: (bytes: number, bytes_len: number, result_ptr: number) => {
+          const hasher = blake3.createHash();
+          for (let i = 0; i < bytes_len; i++) {
+            // A slice is assumed to be 16 bytes.
+            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+            // 8 is a 4-byte LE number depicting the slice's length.
+            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+          }
+
+          buffer.set(hasher.digest(), result_ptr);
+          return BigInt(0);
+        },
+      }
+    });
+
+
+    const tests = Object.entries(instance.exports).filter(([key,]) => key.startsWith("test_"));
+
+    let count = 0;
+    for (const [testName, testFunction] of tests) {
+      const formattedTestName = testName.substring("test_".length).replace("__", "::");
+
+      try {
+        // @ts-ignore
+        testFunction();
+        log.write("compiler", `\u001b[32m[${count}/${tests.length}] ${formattedTestName} ✓ success!\u001b[0m\n`);
+      } catch (err) {
+        // @ts-ignore
+        log.write("compiler", `\u001b[31m[${count}/${tests.length}] ${formattedTestName} ✗ failed\u001b[0m\n\n${err.stack}`);
+      }
+
+      count += 1;
+    }
 
     sync();
   }, [log, editor, fs, sync, llvm, compiler, sysrootLoaded]);
@@ -326,7 +543,7 @@ const Main = () => {
             <span className="text-gray-600">(F1)</span>
           </button>
 
-          <button className="bg-gray-100 hover:bg-gray-300 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2">
+          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded} onClick={handleClickRunTests}>
             Run Tests
             <span className="text-gray-600">(F2)</span>
           </button>
