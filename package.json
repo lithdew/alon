@@ -2,6 +2,7 @@
   "name": "alon",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://lithdew.github.io/alon",
   "dependencies": {
     "@craco/craco": "^6.3.0",
     "@fontsource/inter": "^4.5.0",
@@ -40,7 +41,9 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "predeploy": "craco build",
+    "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
     "extends": [
