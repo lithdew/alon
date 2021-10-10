@@ -14,7 +14,7 @@ window.fetch = function () {
   } else if (arguments[0].endsWith("clang-solana-bpf.wasm")) {
     arguments[0] = process.env.PUBLIC_URL + "/clang-solana-bpf.wasm";
   } else if (arguments[0].endsWith("/examples/example.c")) {
-    arguments[0] = process.env.PUBLIC_URL + "/examples/examples.c";
+    arguments[0] = process.env.PUBLIC_URL + "/examples/example.c";
   }
   return fetch.apply(window, arguments);
 };
