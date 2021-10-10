@@ -2,6 +2,8 @@ import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import Inspector from "react-inspector";
 import { useRef } from "react";
 import { useLogs } from "./Log";
+import Convert from "ansi-to-html";
+import { useMemo } from "react";
 
 export interface Log {
     method: string,
@@ -9,15 +11,22 @@ export interface Log {
 }
 
 export const Message = ({ log }: { log: Log }) => {
+    const data = useMemo(() => {
+        if (typeof log.data === 'string') {
+            return new Convert().toHtml(log.data);
+        }
+        return log.data;
+    }, [log]);
+
     return (
         <div className="flex py-1 pr-1 border-b gap-2 text-xs whitespace-pre-wrap break-words">
             <div className="w-4 h-4 stroke-current text-blue-700" />
             <div className="whitespace-pre-wrap overflow-x-hidden">
                 {
                     typeof log.data === 'string' ?
-                        <div dangerouslySetInnerHTML={{ __html: log.data }} />
+                        <div dangerouslySetInnerHTML={{ __html: data }} />
                         :
-                        <Inspector data={log.data} />
+                        <Inspector data={data} />
                 }
             </div>
         </div>
