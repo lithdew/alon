@@ -38,6 +38,7 @@ import { RefreshIcon, SaveIcon, TrashIcon } from "@heroicons/react/outline";
 
 import SHA from "jssha";
 import * as sha3 from "js-sha3";
+import { useAsyncFn } from "react-use";
 
 const App = () => {
   const wallets = useMemo(
@@ -228,14 +229,28 @@ const Main = () => {
   const log = useLogs();
   const { llvm, compiler } = useLLVM();
 
-  const handleClickCompile = useCallback(async () => {
+  const [compilation, handleClickCompile] = useAsyncFn(async () => {
     if (!editor || !llvm || !fs || !compiler || !sysrootLoaded) {
       return;
     }
 
-    const sourceFileNames = Object.values((fs.lookupPath("/project", {}).node as any).contents)
-      .map((node: any) => fs.getPath(node))
-      .filter((path: string) => path.endsWith(".c"));
+    const getSourceFileNames = (node: any): string[] => {
+      const names = [];
+      if (node.isFolder) {
+        for (const child of Object.values(node.contents)) {
+          names.push(...getSourceFileNames(child));
+        }
+      } else {
+        const nodePath = fs.getPath(node);
+        if (nodePath.endsWith(".c")) {
+          names.push(nodePath);
+        }
+      }
+      return names;
+    };
+
+    const root = fs.lookupPath("/project", {}).node;
+    const sourceFileNames = getSourceFileNames(root);
 
     const compilerArgs = [
       "-Werror",
@@ -310,7 +325,7 @@ const Main = () => {
     sync();
   }, [log, editor, fs, sync, llvm, compiler, sysrootLoaded]);
 
-  const handleClickRunTests = useCallback(async () => {
+  const [testRunner, handleClickRunTests] = useAsyncFn(async () => {
     if (!editor || !llvm || !fs || !compiler || !sysrootLoaded) {
       return;
     }
@@ -319,9 +334,23 @@ const Main = () => {
       fs.unlink("/project/test.o");
     } catch { }
 
-    const sourceFileNames = Object.values((fs.lookupPath("/project", {}).node as any).contents)
-      .map((node: any) => fs.getPath(node))
-      .filter((path: string) => path.endsWith(".c"));
+    const getSourceFileNames = (node: any): string[] => {
+      const names = [];
+      if (node.isFolder) {
+        for (const child of Object.values(node.contents)) {
+          names.push(...getSourceFileNames(child));
+        }
+      } else {
+        const nodePath = fs.getPath(node);
+        if (nodePath.endsWith(".c")) {
+          names.push(nodePath);
+        }
+      }
+      return names;
+    };
+
+    const root = fs.lookupPath("/project", {}).node;
+    const sourceFileNames = getSourceFileNames(root);
 
     const compilerArgs = [
       "-Werror",
@@ -538,12 +567,12 @@ const Main = () => {
     <div className="font-mono antialiased grid grid-flow-row auto-rows-min-auto w-full h-full max-h-full">
       <div className=" bg-gray-200 border-b">
         <div className="flex">
-          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded} onClick={handleClickCompile}>
+          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickCompile}>
             Compile
             <span className="text-gray-600">(F1)</span>
           </button>
 
-          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded} onClick={handleClickRunTests}>
+          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickRunTests}>
             Run Tests
             <span className="text-gray-600">(F2)</span>
           </button>
