@@ -424,7 +424,7 @@ function Tree<T>({ ...props }: HTMLAttributes<HTMLDivElement>) {
                             <button className={`pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100`} onClick={(event) => contextMenu?.data.download(event)}>Download</button>
                         </div>
                         <div className="flex flex-col">
-                            <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.rename(event)}>Rename</button>
+                            <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.rename(event)}>Rename</button>
                             <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.delete(event)}>Delete</button>
                         </div>
                     </div>
