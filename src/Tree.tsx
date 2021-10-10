@@ -35,6 +35,7 @@ export interface TreeContextState<T> extends TreeProviderProps<T> {
 
 interface NodeContextMenu {
     isFolder: boolean,
+    isDraggable: boolean,
     click(): void;
     download(event: React.MouseEvent): void;
     rename(event: React.MouseEvent): void;
@@ -331,6 +332,7 @@ function Node<T>({ node, depth, ...props }: PropsWithChildren<{ node: T, depth: 
     const handleContextMenu = (event: React.MouseEvent) => {
         openContextMenu(event.pageX, event.pageY, {
             isFolder: !!nodeChildren,
+            isDraggable: nodeIsDraggable,
             click: handleClicked,
             download: handleFileDownload,
             rename: handleFileRename,
@@ -423,7 +425,7 @@ function Tree<T>({ ...props }: HTMLAttributes<HTMLDivElement>) {
                         </div>
                         <div className="flex flex-col">
                             <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.rename(event)}>Rename</button>
-                            <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.delete(event)}>Delete</button>
+                            <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.delete(event)}>Delete</button>
                         </div>
                     </div>
                 }
