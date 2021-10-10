@@ -8,11 +8,11 @@ const fetch: any = window.fetch;
 
 window.fetch = function () {
   if (arguments[0].endsWith("tree-sitter.wasm")) {
-    arguments[0] = "/tree-sitter.wasm";
+    arguments[0] = process.env.PUBLIC_URL + "/tree-sitter.wasm";
   } else if (arguments[0].endsWith("tree-sitter-c.wasm")) {
-    arguments[0] = "/tree-sitter-c.wasm";
+    arguments[0] = process.env.PUBLIC_URL + "/tree-sitter-c.wasm";
   } else if (arguments[0].endsWith("clang-solana-bpf.wasm")) {
-    arguments[0] = "/clang-solana-bpf.wasm";
+    arguments[0] = process.env.PUBLIC_URL + "/clang-solana-bpf.wasm";
   }
   return fetch.apply(window, arguments);
 };
