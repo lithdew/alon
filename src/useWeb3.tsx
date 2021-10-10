@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import * as web3 from "@solana/web3.js";
 import * as spl from "@solana/spl-token";
 import { TokenInfo, TokenListProvider } from "@solana/spl-token-registry";
+import { useIsMounted } from "./useIsMounted";
+import { useCallback } from "react";
 
 export const useAccountInfo = () => {
     const { connection } = useConnection();
@@ -55,24 +57,30 @@ export const useSlotInfo = () => {
 export const useTokenAccounts = () => {
     const { connection } = useConnection();
     const { publicKey } = useWallet();
+
     const [tokenAccounts, setTokenAccounts] = useState<{ pubkey: web3.PublicKey, account: web3.AccountInfo<web3.ParsedAccountData> }[]>([]);
+    const mounted = useIsMounted();
+
+    const refresh = useCallback(async () => {
+        if (!connection || !publicKey) {
+            if (mounted) {
+                setTokenAccounts([]);
+            }
+            return;
+        }
+
+        const response = await connection.getParsedTokenAccountsByOwner(publicKey, { programId: spl.TOKEN_PROGRAM_ID })
+        if (mounted) setTokenAccounts(response.value);
+    }, [connection, publicKey, mounted]);
+
     useEffect(() => {
         if (!connection || !publicKey) {
             return setTokenAccounts([]);
         }
-        let cancelled = false;
+        refresh()
+    }, [connection, publicKey, refresh])
 
-        (async () => {
-            const response = await connection.getParsedTokenAccountsByOwner(publicKey, { programId: spl.TOKEN_PROGRAM_ID })
-            if (!cancelled) setTokenAccounts(response.value);
-        })()
-
-        return () => {
-            cancelled = true
-        }
-    }, [connection, publicKey])
-
-    return tokenAccounts
+    return { tokenAccounts, refreshTokenAccounts: refresh };
 }
 
 export const useTokenList = () => {

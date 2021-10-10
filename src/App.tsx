@@ -34,7 +34,7 @@ import { useLanguageParser } from "./useTreeSitter";
 import { LLVMProvider, useFileSystem, useLLVM } from "./useLLVM";
 import { useExampleCode, useSysroot } from "./useAlon";
 import { LogProvider, useLogs } from "./Log";
-import { SaveIcon, TrashIcon } from "@heroicons/react/outline";
+import { RefreshIcon, SaveIcon, TrashIcon } from "@heroicons/react/outline";
 
 const App = () => {
   const wallets = useMemo(
@@ -85,7 +85,7 @@ const SlotInfo = () => {
 
 const Main = () => {
   const accountInfo = useAccountInfo();
-  const tokenAccounts = useTokenAccounts();
+  const { tokenAccounts, refreshTokenAccounts } = useTokenAccounts();
 
   const tokenList = useTokenList();
 
@@ -341,8 +341,11 @@ const Main = () => {
           <WalletButton className="w-full" />
 
           <div>
-            <div className="font-lg leading-6 mb-1">
+            <div className="font-lg leading-6 mb-1 flex justify-between">
               Tokens
+              <button>
+                <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={refreshTokenAccounts} />
+              </button>
             </div>
 
             <dl className="h-36 bg-gray-100 border grid auto-rows-min gap-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
