@@ -413,11 +413,11 @@ function Tree<T>({ ...props }: HTMLAttributes<HTMLDivElement>) {
                 {({ state: contextMenu }) =>
                     <div ref={contextMenuRef} className={`fixed z-10 bg-white flex py-2 flex-col gap-1 text-xs shadow-lg ${contextMenu ? "" : "hidden"}`} style={{ top: contextMenu?.y, left: contextMenu?.x }}>
                         <div className="flex flex-col border-b">
-                            <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.createNewFile(event, "")}>New Folder</button>
+                            <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.createNewFile(event, "")}>New Folder</button>
                         </div>
                         <div className="flex flex-col border-b">
-                            <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.createNewFile(event, ".c")}>New Source File (*.c)</button>
-                            <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={(event) => contextMenu?.data.createNewFile(event, ".h")}>New Header File (*.h)</button>
+                            <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.createNewFile(event, ".c")}>New Source File (*.c)</button>
+                            <button className={`pl-6 pr-4 py-1 w-full text-left  ${!contextMenu?.data.isDraggable ? "cursor-default bg-gray-100 text-gray-400" : "hover:bg-gray-100"}`} disabled={!contextMenu?.data.isDraggable} onClick={(event) => contextMenu?.data.createNewFile(event, ".h")}>New Header File (*.h)</button>
                         </div>
                         <div className="flex flex-col border-b">
                             <button className="pl-6 pr-4 py-1 w-full text-left hover:bg-gray-100" onClick={() => contextMenu?.data.click()}>Open</button>
