@@ -659,8 +659,8 @@ const Main = () => {
             <div>
               <div className="font-lg leading-6 mb-1 flex justify-between">
                 Tokens
-                <button>
-                  <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={refreshTokenAccounts} />
+                <button onClick={refreshTokenAccounts}>
+                  <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg"  />
                 </button>
               </div>
 
@@ -687,8 +687,8 @@ const Main = () => {
             <div className="flex flex-col h-full">
               <div className="flex-grow-0 font-lg leading-6 mb-1 flex justify-between">
                 Files
-                <button onClick={() => setImportModalIsOpened(true)}>
-                  <UploadIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" />
+                <button onClick={() => setImportModalIsOpened(true)} disabled={!sysrootLoaded} className={`${!sysrootLoaded ? `cursor-default` : ``}`}>
+                  <UploadIcon className={`w-5 h-5 p-0.5 bg-gray-100 rounded-lg ${!sysrootLoaded ? `text-gray-400` : `hover:bg-gray-300`}`} />
                 </button>
               </div>
 
