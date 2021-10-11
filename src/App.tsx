@@ -1,5 +1,7 @@
 import {
   ConnectionProvider,
+  useConnection,
+  useWallet,
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import * as web3 from "@solana/web3.js";
@@ -23,7 +25,7 @@ import {
 import Console from "./Console";
 import { ResponsiveMonacoEditor } from "./Monaco";
 import WalletButton from "./WalletButton";
-import { useAccountInfo, useSlotInfo, useTokenAccounts, useTokenList } from "./useWeb3";
+import { useSlotInfo } from "./useWeb3";
 import Tree, { TreeProvider } from "./Tree";
 import { monaco } from "react-monaco-editor";
 import Parser from "web-tree-sitter";
@@ -34,13 +36,14 @@ import { useLanguageParser } from "./useTreeSitter";
 import { LLVMProvider, useFileSystem, useLLVM } from "./useLLVM";
 import { useExampleCode, useSysroot } from "./useAlon";
 import { LogProvider, useLogs } from "./Log";
-import { RefreshIcon, SaveIcon, TrashIcon, UploadIcon } from "@heroicons/react/outline";
+import { SaveIcon, TrashIcon, UploadIcon } from "@heroicons/react/outline";
 
 import SHA from "jssha";
 import * as sha3 from "js-sha3";
 import { useAsyncFn } from "react-use";
 import Modal from "react-modal";
 import * as zip from "@zip.js/zip.js";
+import { TokenAccounts } from "./TokenAccounts";
 
 const App = () => {
   const wallets = useMemo(
@@ -54,7 +57,7 @@ const App = () => {
   );
 
   return (
-    <ConnectionProvider endpoint={web3.clusterApiUrl("mainnet-beta")}>
+    <ConnectionProvider endpoint={web3.clusterApiUrl("devnet")}>
       <WalletProvider wallets={wallets}>
         <WalletModalProvider>
           <LogProvider>
@@ -90,34 +93,6 @@ const SlotInfo = () => {
 }
 
 const Main = () => {
-  const accountInfo = useAccountInfo();
-  const { tokenAccounts, refreshTokenAccounts } = useTokenAccounts();
-
-  const tokenList = useTokenList();
-
-  const balance = useMemo<string | null>(() => {
-    if (!accountInfo) return null;
-    const numDecimals = 9 - Math.max(0, accountInfo.lamports.toString().indexOf('.'));
-    return (accountInfo.lamports / web3.LAMPORTS_PER_SOL).toFixed(numDecimals)
-  }, [accountInfo]);
-
-  const tokenAccountContent = useMemo(() => {
-    if (!tokenList) return [];
-
-    const sorted = tokenAccounts.sort((a, b) => {
-      return Number.parseFloat(b.account.data.parsed.info.tokenAmount.uiAmountString) - Number.parseFloat(a.account.data.parsed.info.tokenAmount.uiAmountString);
-    });
-
-    return sorted.map((tokenAccount) => {
-      const key = tokenAccount.pubkey.toBase58();
-      const mintKey = tokenAccount.account.data.parsed.info.mint;
-      const amount = tokenAccount.account.data.parsed.info.tokenAmount.uiAmountString;
-      const info = tokenList.find((tokenInfo) => tokenInfo.address === mintKey);
-
-      return { key, mintKey, amount, info };
-    });
-  }, [tokenAccounts, tokenList]);
-
   const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor | null>(null);
   const handleEditorMount = useCallback((editor: monaco.editor.IStandaloneCodeEditor) => {
     setEditor(editor);
@@ -136,7 +111,7 @@ const Main = () => {
       return;
     }
     const changeModelHandler = editor.onDidChangeModel(event => {
-      // editor.updateOptions({ readOnly: event.newModelUrl?.path.startsWith("/usr") || !event.newModelUrl?.path.endsWith(".c") });
+      editor.updateOptions({ readOnly: event.newModelUrl?.path.startsWith("/usr") || !event.newModelUrl?.path.endsWith(".c") });
       setTree(null);
     });
     return () => {
@@ -632,6 +607,27 @@ const Main = () => {
     sync();
   }, [fs, log, importUrl, setImportUrl, sync]);
 
+  const { connection } = useConnection();
+  const { publicKey } = useWallet();
+
+  const handleClickAirdrop = useCallback(async () => {
+    if (!connection || !publicKey) {
+      return;
+    }
+
+    log.write("alon", `Requesting an airdrop for 1 SOL to <a class="underline text-gray-700" href="https://explorer.solana.com/address/${publicKey.toBase58()}?cluster=devnet">${publicKey.toBase58()}</a>.`);
+
+    try {
+      const transactionId = await connection.requestAirdrop(publicKey, 1 * web3.LAMPORTS_PER_SOL);
+      log.write("alon", `Created an airdrop transaction for 1 SOL. Transaction ID: <a class="underline text-gray-700" href="https://explorer.solana.com/tx/${transactionId}?cluster=devnet">${transactionId}</a>`)
+      await connection.confirmTransaction(transactionId);
+      log.write("alon", `Airdrop transaction <a class="underline text-gray-700" href="https://explorer.solana.com/tx/${transactionId}?cluster=devnet">${transactionId}</a> has been fully confirmed.`);
+    } catch (err) {
+      // @ts-ignore
+      log.write("alon", `An error occurred while attempting to airdrop 1 SOL to <a class="underline text-gray-700" href="https://explorer.solana.com/address/${publicKey.toBase58()}?cluster=devnet">${publicKey.toBase58()}</a>.\n\n${err.stack}`)
+    }
+  }, [log, connection, publicKey]);
+
   return (
     <>
       <div className="font-mono antialiased grid grid-flow-row auto-rows-min-auto w-full h-full max-h-full">
@@ -646,6 +642,11 @@ const Main = () => {
               Run Tests
               <span className="text-gray-600">(F2)</span>
             </button>
+
+            <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${connection && publicKey ? "hover:bg-gray-300" : "bg-gray-200 cursor-default"}`} disabled={!connection || !publicKey} onClick={handleClickAirdrop}>
+              Airdrop 1 SOL
+              <span className="text-gray-600">(F3)</span>
+            </button>
           </div>
         </div>
         <div className="w-full h-full grid grid-flow-col auto-cols-min-auto">
@@ -657,31 +658,7 @@ const Main = () => {
             <WalletButton className="w-full" />
 
             <div>
-              <div className="font-lg leading-6 mb-1 flex justify-between">
-                Tokens
-                <button onClick={refreshTokenAccounts}>
-                  <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg"  />
-                </button>
-              </div>
-
-              <dl className="h-36 bg-gray-100 border grid auto-rows-min gap-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-                <div className="grid grid-cols-2 gap-1 px-2 py-1 text-xs bg-white whitespace-nowrap">
-                  <dt className="font-medium text-gray-500">Solana</dt>
-                  <dd className="text-gray-900">{balance ?? "-"} SOL</dd>
-                </div>
-                {tokenAccountContent.map(tokenAccount => {
-                  return (
-                    <div key={tokenAccount.key} className="grid grid-cols-2 gap-1 px-2 py-1 text-xs whitespace-nowrap bg-white">
-                      <dt className="font-medium">
-                        <a href={`https://explorer.solana.com/address/${tokenAccount.mintKey}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-500 hover:underline">{tokenAccount.info?.name ?? "Unknown"}</a>
-                      </dt>
-                      <dd className="">
-                        <a href={`https://explorer.solana.com/address/${tokenAccount.key}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-900 hover:underline">{tokenAccount.amount} {tokenAccount.info?.symbol ?? ""}</a>
-                      </dd>
-                    </div>
-                  )
-                })}
-              </dl>
+              <TokenAccounts />
             </div>
 
             <div className="flex flex-col h-full">

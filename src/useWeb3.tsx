@@ -23,8 +23,15 @@ export const useAccountInfo = () => {
             if (!cancelled) setAccountInfo(info);
         })()
 
+        const handle = connection.onAccountChange(publicKey, (newAccountInfo) => {
+            if (!cancelled) {
+                setAccountInfo(newAccountInfo);
+            }
+        });
+
         return () => {
-            cancelled = true
+            connection.removeAccountChangeListener(handle);
+            cancelled = true;
         }
     }, [connection, publicKey])
 
