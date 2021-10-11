@@ -619,7 +619,7 @@ const Main = () => {
 
     try {
       const transactionId = await connection.requestAirdrop(publicKey, 1 * web3.LAMPORTS_PER_SOL);
-      log.write("alon", `Created an airdrop transaction for 1 SOL. Transaction ID: <a class="underline text-gray-700" href="https://explorer.solana.com/tx/${transactionId}?cluster=devnet">${transactionId}</a>`)
+      log.write("alon", `Waiting for the airdrop transaction for 1 SOL to be fully confirmed. Transaction ID: <a class="underline text-gray-700" href="https://explorer.solana.com/tx/${transactionId}?cluster=devnet">${transactionId}</a>`)
       await connection.confirmTransaction(transactionId);
       log.write("alon", `Airdrop transaction <a class="underline text-gray-700" href="https://explorer.solana.com/tx/${transactionId}?cluster=devnet">${transactionId}</a> has been fully confirmed.`);
     } catch (err) {
