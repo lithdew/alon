@@ -34,11 +34,13 @@ import { useLanguageParser } from "./useTreeSitter";
 import { LLVMProvider, useFileSystem, useLLVM } from "./useLLVM";
 import { useExampleCode, useSysroot } from "./useAlon";
 import { LogProvider, useLogs } from "./Log";
-import { RefreshIcon, SaveIcon, TrashIcon } from "@heroicons/react/outline";
+import { RefreshIcon, SaveIcon, TrashIcon, UploadIcon } from "@heroicons/react/outline";
 
 import SHA from "jssha";
 import * as sha3 from "js-sha3";
 import { useAsyncFn } from "react-use";
+import Modal from "react-modal";
+import * as zip from "@zip.js/zip.js";
 
 const App = () => {
   const wallets = useMemo(
@@ -563,118 +565,211 @@ const Main = () => {
     saveAs(new Blob([JSON.stringify(logs)]), `${scope}_logs.txt`);
   }, [log]);
 
+  const [importModalIsOpened, setImportModalIsOpened] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+
+  const modalStyles = {
+    overlay: {
+      backgroundColor: 'rgba(0, 0, 0, 0.75)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+    }
+  };
+
+  const handleImportSourceArchiveClicked = useCallback(async () => {
+    if (!fs) {
+      return;
+    }
+
+    const url = importUrl;
+    setImportModalIsOpened(false);
+    setImportUrl("");
+
+    log.write("alon", `Downloading ZIP archive from '${url}'...`);
+
+    const blob = await (await fetch(`https://cors.bridged.cc/${url}`)).blob();
+
+    log.write("alon", "Unpacking ZIP archive...");
+
+    const reader = new zip.ZipReader(new zip.BlobReader(blob));
+    const entries = await reader.getEntries();
+
+    const recursiveDelete = (node: any) => {
+      const path = fs.getPath(node);
+      const model = monaco.editor.getModels().find(model => model.uri.path === path);
+      if (model) {
+        model.dispose();
+      }
+
+      if (node.isFolder) {
+        Object.values(node.contents).forEach(recursiveDelete);
+        fs.rmdir(path);
+      } else {
+        fs.unlink(path);
+      }
+    };
+
+    const result = fs.lookupPath("/project", {});
+    Object.values((result.node as any).contents).forEach(recursiveDelete);
+
+    for (const entry of entries) {
+      const path = "/project/" + entry.filename.slice(entry.filename.indexOf("/") + 1);
+      if (entry.directory) {
+        try { fs.mkdir(path); } catch { }
+        continue;
+      }
+
+      const bytes = await entry.getData!(new zip.Uint8ArrayWriter());
+      fs.writeFile(path, bytes);
+
+      log.write("alon", `Unpacked source archive file '${path}'.`);
+    }
+
+    await reader.close();
+
+    log.write("alon", "Source ZIP archive unpacked.");
+    sync();
+  }, [fs, log, importUrl, setImportUrl, sync]);
+
   return (
-    <div className="font-mono antialiased grid grid-flow-row auto-rows-min-auto w-full h-full max-h-full">
-      <div className=" bg-gray-200 border-b">
-        <div className="flex">
-          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickCompile}>
-            Compile
-            <span className="text-gray-600">(F1)</span>
-          </button>
+    <>
+      <div className="font-mono antialiased grid grid-flow-row auto-rows-min-auto w-full h-full max-h-full">
+        <div className=" bg-gray-200 border-b">
+          <div className="flex">
+            <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickCompile}>
+              Compile
+              <span className="text-gray-600">(F1)</span>
+            </button>
 
-          <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickRunTests}>
-            Run Tests
-            <span className="text-gray-600">(F2)</span>
-          </button>
+            <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading && !testRunner.loading ? "hover:bg-gray-300" : "animate-pulse bg-gray-200 cursor-default"}`} disabled={!sysrootLoaded || compilation.loading || testRunner.loading} onClick={handleClickRunTests}>
+              Run Tests
+              <span className="text-gray-600">(F2)</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <div className="w-full h-full grid grid-flow-col auto-cols-min-auto">
-        <div className="border-r p-4 flex flex-col gap-4" style={{ width: "24rem" }}>
-          <p className="text-2xl leading-7 font-bold">Alon</p>
+        <div className="w-full h-full grid grid-flow-col auto-cols-min-auto">
+          <div className="border-r p-4 flex flex-col gap-4" style={{ width: "24rem" }}>
+            <p className="text-2xl leading-7 font-bold">Alon</p>
 
-          <SlotInfo />
+            <SlotInfo />
 
-          <WalletButton className="w-full" />
+            <WalletButton className="w-full" />
 
-          <div>
-            <div className="font-lg leading-6 mb-1 flex justify-between">
-              Tokens
-              <button>
-                <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={refreshTokenAccounts} />
+            <div>
+              <div className="font-lg leading-6 mb-1 flex justify-between">
+                Tokens
+                <button>
+                  <RefreshIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={refreshTokenAccounts} />
+                </button>
+              </div>
+
+              <dl className="h-36 bg-gray-100 border grid auto-rows-min gap-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
+                <div className="grid grid-cols-2 gap-1 px-2 py-1 text-xs bg-white whitespace-nowrap">
+                  <dt className="font-medium text-gray-500">Solana</dt>
+                  <dd className="text-gray-900">{balance ?? "-"} SOL</dd>
+                </div>
+                {tokenAccountContent.map(tokenAccount => {
+                  return (
+                    <div key={tokenAccount.key} className="grid grid-cols-2 gap-1 px-2 py-1 text-xs whitespace-nowrap bg-white">
+                      <dt className="font-medium">
+                        <a href={`https://explorer.solana.com/address/${tokenAccount.mintKey}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-500 hover:underline">{tokenAccount.info?.name ?? "Unknown"}</a>
+                      </dt>
+                      <dd className="">
+                        <a href={`https://explorer.solana.com/address/${tokenAccount.key}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-900 hover:underline">{tokenAccount.amount} {tokenAccount.info?.symbol ?? ""}</a>
+                      </dd>
+                    </div>
+                  )
+                })}
+              </dl>
+            </div>
+
+            <div className="flex flex-col h-full">
+              <div className="flex-grow-0 font-lg leading-6 mb-1 flex justify-between">
+                Files
+                <button onClick={() => setImportModalIsOpened(true)}>
+                  <UploadIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" />
+                </button>
+              </div>
+
+              <div className={`relative flex-grow border text-xs overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 ${sysrootLoaded ? "" : "animate-pulse"}`}>
+                <TreeProvider data={files} getName={getFileName} getChildren={getFileChildren} onClicked={handleFileClicked}>
+                  <Tree<any> className="absolute top-0 left-0 bottom-0 right-0" />
+                </TreeProvider>
+              </div>
+            </div>
+          </div>
+          <div className={`w-full h-full flex flex-col ${sysrootLoaded ? "" : "animate-pulse"}`}>
+            <Tabs editor={editor} />
+            <div className={`w-full h-full bg-gray-100 ${sysrootLoaded ? "" : "animate-pulse"}`}>
+              <ResponsiveMonacoEditor
+                options={{
+                  fontSize: 12,
+                  padding: {
+                    top: 16,
+                  },
+                  model: null,
+                }}
+                editorDidMount={handleEditorMount}
+                onChange={handleChangeCode}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1 border-l" style={{ width: "36rem" }}>
+            <div className="border-b flex-grow flex flex-col">
+              <div className="px-2 py-1 text-sm font-medium flex justify-between items-center">
+                Compiler Logs
+                <div className="flex gap-1">
+                  <button>
+                    <SaveIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleSaveLogsClicked("compiler")} />
+                  </button>
+                  <button>
+                    <TrashIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleTrashLogsClicked("compiler")} />
+                  </button>
+
+                </div>
+              </div>
+              <Console scope="compiler" />
+            </div>
+            <div className="border-b flex-grow flex flex-col">
+              <div className="px-2 py-1 text-sm font-medium flex justify-between items-center">
+                Alon Logs
+                <div className="flex gap-1">
+                  <button>
+                    <SaveIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleSaveLogsClicked("alon")} />
+                  </button>
+                  <button>
+                    <TrashIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleTrashLogsClicked("alon")} />
+                  </button>
+                </div>
+              </div>
+              <Console scope="alon" />
+            </div>
+          </div>
+        </div>
+      </div >
+      <Modal isOpen={importModalIsOpened} onRequestClose={() => setImportModalIsOpened(false)} style={modalStyles} className="font-mono">
+        <div className="p-4 py-6 flex flex-col gap-2 m-auto bg-white w-96">
+          <div className="py-2 break-words">
+            Provide a link to a ZIP archive containing your source files.
+          </div>
+          <div className="flex flex-col gap-4">
+            <input
+              type="url"
+              className="p-2 border"
+              placeholder="https://github.com/lithdew/alon-sysroot/archive/refs/heads/master.zip"
+              value={importUrl}
+              onChange={(event) => setImportUrl(event.target.value)}
+            />
+            <div>
+              <button className="flex w-full" onClick={handleImportSourceArchiveClicked}>
+                <span className="rounded px-4 py-1 bg-gray-900 hover:bg-gray-700 text-white appearance-none shadow-lg w-full">Import</span>
               </button>
             </div>
-
-            <dl className="h-36 bg-gray-100 border grid auto-rows-min gap-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200">
-              <div className="grid grid-cols-2 gap-1 px-2 py-1 text-xs bg-white whitespace-nowrap">
-                <dt className="font-medium text-gray-500">Solana</dt>
-                <dd className="text-gray-900">{balance ?? "-"} SOL</dd>
-              </div>
-              {tokenAccountContent.map(tokenAccount => {
-                return (
-                  <div key={tokenAccount.key} className="grid grid-cols-2 gap-1 px-2 py-1 text-xs whitespace-nowrap bg-white">
-                    <dt className="font-medium">
-                      <a href={`https://explorer.solana.com/address/${tokenAccount.mintKey}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-500 hover:underline">{tokenAccount.info?.name ?? "Unknown"}</a>
-                    </dt>
-                    <dd className="">
-                      <a href={`https://explorer.solana.com/address/${tokenAccount.key}`} target="_blank" rel="noreferrer" className="block overflow-hidden overflow-ellipsis text-gray-900 hover:underline">{tokenAccount.amount} {tokenAccount.info?.symbol ?? ""}</a>
-                    </dd>
-                  </div>
-                )
-              })}
-            </dl>
-          </div>
-
-          <div className="flex flex-col h-full">
-            <div className="flex-grow-0 font-lg leading-6 mb-1">
-              Files
-            </div>
-
-            <div className={`relative flex-grow border text-xs overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200 ${sysrootLoaded ? "" : "animate-pulse"}`}>
-              <TreeProvider data={files} getName={getFileName} getChildren={getFileChildren} onClicked={handleFileClicked}>
-                <Tree<any> className="absolute top-0 left-0 bottom-0 right-0" />
-              </TreeProvider>
-            </div>
           </div>
         </div>
-        <div className={`w-full h-full flex flex-col ${sysrootLoaded ? "" : "animate-pulse"}`}>
-          <Tabs editor={editor} />
-          <div className={`w-full h-full bg-gray-100 ${sysrootLoaded ? "" : "animate-pulse"}`}>
-            <ResponsiveMonacoEditor
-              options={{
-                fontSize: 12,
-                padding: {
-                  top: 16,
-                },
-                model: null,
-              }}
-              editorDidMount={handleEditorMount}
-              onChange={handleChangeCode}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1 border-l" style={{ width: "36rem" }}>
-          <div className="border-b flex-grow flex flex-col">
-            <div className="px-2 py-1 text-sm font-medium flex justify-between items-center">
-              Compiler Logs
-              <div className="flex gap-1">
-                <button>
-                  <SaveIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleSaveLogsClicked("compiler")} />
-                </button>
-                <button>
-                  <TrashIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleTrashLogsClicked("compiler")} />
-                </button>
-
-              </div>
-            </div>
-            <Console scope="compiler" />
-          </div>
-          <div className="border-b flex-grow flex flex-col">
-            <div className="px-2 py-1 text-sm font-medium flex justify-between items-center">
-              Alon Logs
-              <div className="flex gap-1">
-                <button>
-                  <SaveIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleSaveLogsClicked("alon")} />
-                </button>
-                <button>
-                  <TrashIcon className="w-5 h-5 p-0.5 bg-gray-100 hover:bg-gray-300 rounded-lg" onClick={() => handleTrashLogsClicked("alon")} />
-                </button>
-              </div>
-            </div>
-            <Console scope="alon" />
-          </div>
-        </div>
-      </div>
-    </div >
+      </Modal>
+    </>
   );
 };
 
