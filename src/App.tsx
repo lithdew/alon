@@ -511,7 +511,7 @@ const Main = () => {
 
     const tests = Object.entries(instance.exports).filter(([key,]) => key.startsWith("test_"));
 
-    let count = 0;
+    let count = 1;
     for (const [testName, testFunction] of tests) {
       const formattedTestName = testName.substring("test_".length).replace("__", "::");
 
