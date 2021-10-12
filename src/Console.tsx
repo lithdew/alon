@@ -1,5 +1,5 @@
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
-import Inspector, { chromeLight } from "react-inspector";
+import Inspector from "react-inspector";
 import { useRef } from "react";
 import { useLogs } from "./Log";
 import Convert from "ansi-to-html";

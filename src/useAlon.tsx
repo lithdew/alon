@@ -59,7 +59,11 @@ export const useSysroot = () => {
 
         log.write("alon", "Downloading sysroot...");
 
-        const sysrootArchiveBlob = await (await fetch("https://cors.bridged.cc/https://api.github.com/repos/lithdew/alon-sysroot/zipball/master")).blob();
+        const sysrootArchiveBlob = await (await fetch("https://cors.bridged.cc/https://api.github.com/repos/lithdew/alon-sysroot/zipball/master", {
+            headers: {
+                "x-cors-grida-api-key": "7a571699-418f-4f84-83b8-51393c448c40",
+            }
+        })).blob();
 
         log.write("alon", "Unpacking sysroot...");
 

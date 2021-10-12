@@ -563,7 +563,9 @@ const Main = () => {
 
     log.write("alon", `Downloading ZIP archive from '${url}'...`);
 
-    const blob = await (await fetch(`https://cors.bridged.cc/${url}`)).blob();
+    const blob = await (await fetch(`https://cors.bridged.cc/${url}`, { headers: {
+      "x-cors-grida-api-key": "7a571699-418f-4f84-83b8-51393c448c40",
+    }})).blob();
 
     log.write("alon", "Unpacking ZIP archive...");
 
