@@ -40,10 +40,11 @@ import { SaveIcon, TrashIcon, UploadIcon } from "@heroicons/react/outline";
 
 import SHA from "jssha";
 import * as sha3 from "js-sha3";
-import { useAsyncFn } from "react-use";
+import { useAsyncFn, useMountedState } from "react-use";
 import Modal from "react-modal";
 import * as zip from "@zip.js/zip.js";
 import { TokenAccounts } from "./TokenAccounts";
+import { useRef } from "react";
 
 const App = () => {
   const wallets = useMemo(
@@ -120,49 +121,6 @@ const Main = () => {
   }, [editor]);
 
   const { fs, sync } = useFileSystem();
-
-  const handleChangeCode = useCallback((newCode: string, event: monaco.editor.IModelContentChangedEvent) => {
-    if (!fs || !editor || !parser) {
-      return;
-    }
-
-    const model = editor.getModel();
-    if (!model) {
-      return;
-    }
-
-    fs.writeFile(model.uri.path, newCode);
-
-    if (!tree) {
-      const newTree = parser.parse(newCode);
-      markEditorErrors(newTree, editor);
-      setTree(newTree);
-      return;
-    }
-
-    if (event.changes.length > 0) {
-      for (const change of event.changes) {
-        const startIndex = change.rangeOffset;
-        const oldEndIndex = change.rangeOffset + change.rangeLength;
-        const newEndIndex = change.rangeOffset + change.text.length;
-        const startPosition = editor.getModel()!.getPositionAt(startIndex);
-        const oldEndPosition = editor.getModel()!.getPositionAt(oldEndIndex);
-        const newEndPosition = editor.getModel()!.getPositionAt(newEndIndex);
-        tree.edit({
-          startIndex,
-          oldEndIndex,
-          newEndIndex,
-          startPosition: { row: startPosition.lineNumber, column: startPosition.column },
-          oldEndPosition: { row: oldEndPosition.lineNumber, column: oldEndPosition.column },
-          newEndPosition: { row: newEndPosition.lineNumber, column: newEndPosition.column },
-        });
-      }
-
-      const newTree = parser.parse(newCode, tree);
-      markEditorErrors(newTree, editor);
-      setTree(newTree);
-    }
-  }, [fs, editor, parser, tree]);
 
   const [files, setFiles] = useState<any[]>([]);
 
@@ -563,9 +521,11 @@ const Main = () => {
 
     log.write("alon", `Downloading ZIP archive from '${url}'...`);
 
-    const blob = await (await fetch(`https://cors.bridged.cc/${url}`, { headers: {
-      "x-cors-grida-api-key": "7a571699-418f-4f84-83b8-51393c448c40",
-    }})).blob();
+    const blob = await (await fetch(`https://cors.bridged.cc/${url}`, {
+      headers: {
+        "x-cors-grida-api-key": "7a571699-418f-4f84-83b8-51393c448c40",
+      }
+    })).blob();
 
     log.write("alon", "Unpacking ZIP archive...");
 
@@ -630,6 +590,64 @@ const Main = () => {
     }
   }, [log, connection, publicKey]);
 
+  const [autoRunTests, setAutoRunTests] = useState(false);
+  const autoRunTestTimeoutHandle = useRef<number | null>(null);
+  const isMounted = useMountedState();
+
+  const handleChangeCode = useCallback((newCode: string, event: monaco.editor.IModelContentChangedEvent) => {
+    if (!fs || !editor || !parser) {
+      return;
+    }
+
+    const model = editor.getModel();
+    if (!model) {
+      return;
+    }
+
+    fs.writeFile(model.uri.path, newCode);
+
+    if (!tree) {
+      const newTree = parser.parse(newCode);
+      markEditorErrors(newTree, editor);
+      setTree(newTree);
+      return;
+    }
+
+    if (event.changes.length > 0) {
+      for (const change of event.changes) {
+        const startIndex = change.rangeOffset;
+        const oldEndIndex = change.rangeOffset + change.rangeLength;
+        const newEndIndex = change.rangeOffset + change.text.length;
+        const startPosition = editor.getModel()!.getPositionAt(startIndex);
+        const oldEndPosition = editor.getModel()!.getPositionAt(oldEndIndex);
+        const newEndPosition = editor.getModel()!.getPositionAt(newEndIndex);
+        tree.edit({
+          startIndex,
+          oldEndIndex,
+          newEndIndex,
+          startPosition: { row: startPosition.lineNumber, column: startPosition.column },
+          oldEndPosition: { row: oldEndPosition.lineNumber, column: oldEndPosition.column },
+          newEndPosition: { row: newEndPosition.lineNumber, column: newEndPosition.column },
+        });
+
+        if (autoRunTests) {
+          if (autoRunTestTimeoutHandle.current) {
+            clearTimeout(autoRunTestTimeoutHandle.current);
+          }
+          autoRunTestTimeoutHandle.current = setTimeout(() => {
+            if (isMounted()) {
+              handleClickRunTests();
+            }
+          }, 500) as any;
+        }
+      }
+
+      const newTree = parser.parse(newCode, tree);
+      markEditorErrors(newTree, editor);
+      setTree(newTree);
+    }
+  }, [fs, editor, parser, tree, autoRunTests, handleClickRunTests, isMounted]);
+
   return (
     <>
       <div className="font-mono antialiased grid grid-flow-row auto-rows-min-auto w-full h-full max-h-full">
@@ -645,9 +663,15 @@ const Main = () => {
               <span className="text-gray-600">(F2)</span>
             </button>
 
+            <div className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${sysrootLoaded && !compilation.loading ? "hover:bg-gray-300" : "bg-gray-200 cursor-default"}`}>
+              <input type="checkbox" disabled={!sysrootLoaded || compilation.loading} checked={autoRunTests} onChange={() => setAutoRunTests(checked => !checked)} />
+              <label>Auto-run Tests</label>
+              <span className="text-gray-600">(F3)</span>
+            </div>
+
             <button className={`bg-gray-100 px-2 py-1 text-xs border-r text-center flex whitespace-nowrap gap-2 ${connection && publicKey ? "hover:bg-gray-300" : "bg-gray-200 cursor-default"}`} disabled={!connection || !publicKey} onClick={handleClickAirdrop}>
               Airdrop 1 SOL
-              <span className="text-gray-600">(F3)</span>
+              <span className="text-gray-600">(F4)</span>
             </button>
           </div>
         </div>
