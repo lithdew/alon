@@ -372,7 +372,7 @@ const Main = () => {
           throw new Error(`Panic in ${new TextDecoder().decode(slice(file, len))} at ${line}:${column}`);
         },
         sol_log_(ptr: number, len: number) {
-          log.write("compiler", `Program log: ${slice(ptr, len)}`);
+          log.write("compiler", `Program log: ${new TextDecoder().decode(slice(ptr, len))}`);
         },
         sol_log_64_(a: number, b: number, c: number, d: number, e: number) {
           log.write("compiler", `Program log: ${a}, ${b}, ${c}, ${d}, ${e}`);
