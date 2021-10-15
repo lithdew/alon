@@ -187,43 +187,50 @@ const Main = () => {
     const root = fs.lookupPath("/project", {}).node;
     const sourceFileNames = getSourceFileNames(root);
 
-    const compilerArgs = [
-      "-Werror",
-      "-O2",
-      "-fno-builtin",
-      "-std=c17",
-      "-isystem/usr/include/clang",
-      "-isystem/usr/include/solana",
-      "-mrelocation-model",
-      "pic",
-      "-pic-level",
-      "2",
-      "-emit-obj",
-      "-I/project/",
-      "-triple",
-      "bpfel-unknown-unknown-bpfel+solana",
-      "-o",
-      "/project/program.o",
-    ]
-
     for (const sourceFileName of sourceFileNames) {
-      compilerArgs.push(sourceFileName);
+      const compilerArgs = [
+        "-Werror",
+        "-O2",
+        "-fno-builtin",
+        "-std=c17",
+        "-isystem/usr/include/clang",
+        "-isystem/usr/include/solana",
+        "-mrelocation-model",
+        "pic",
+        "-pic-level",
+        "2",
+        "-emit-obj",
+        "-I/project/",
+        "-triple",
+        "bpfel-unknown-unknown-bpfel+solana",
+        "-o",
+        "/project/program.o",
+      ]
+
+      compilerArgs.push("-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName);
+
+      const compilerArgsList = new llvm.StringList();
+      compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
+
+      log.write("compiler", "Compiling with arguments:")
+      log.write("compiler", compilerArgs);
+
+      const compileResult = await compiler.compile(compilerArgsList);
+      if (!compileResult.success) {
+        log.write("compiler", "Error while compiling:");
+        log.write("compiler", compileResult.diags);
+
+        for (const sourceFileName of sourceFileNames) {
+          try {
+            fs.unlink(`${sourceFileName.slice(0, -2)}.o`);
+          } catch { }
+        }
+
+        return;
+      }
+
+      log.write("compiler", `Successfully compiled '${sourceFileName.slice(0, -2)}.o'.`);
     }
-
-    const compilerArgsList = new llvm.StringList();
-    compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
-
-    log.write("compiler", "Compiling with arguments:")
-    log.write("compiler", compilerArgs);
-
-    const compileResult = await compiler.compile(compilerArgsList);
-    if (!compileResult.success) {
-      log.write("compiler", "Error while compiling:");
-      log.write("compiler", compileResult.diags);
-      return;
-    }
-
-    log.write("compiler", `Successfully compiled 'program.o'.`);
 
     try {
       fs.unlink("/project/program.so");
@@ -240,8 +247,11 @@ const Main = () => {
       "/usr/lib/libcompiler_builtins.rlib",
       "-o",
       "/project/program.so",
-      "/project/program.o",
     ];
+
+    for (const sourceFileName of sourceFileNames) {
+      linkerArgs.push(`${sourceFileName.slice(0, -2)}.o`);
+    }
 
     const linkerArgsList = new llvm.StringList();
     linkerArgs.forEach(arg => linkerArgsList.push_back(arg));
@@ -250,11 +260,19 @@ const Main = () => {
     log.write("compiler", linkerArgs);
 
     const linkResult = await compiler.linkBpf(linkerArgsList);
+
+    for (const sourceFileName of sourceFileNames) {
+      try {
+        fs.unlink(`${sourceFileName.slice(0, -2)}.o`);
+      } catch { }
+    }
+
     if (!linkResult.success) {
       log.write("compiler", "Error while linking:");
       log.write("compiler", linkResult.err);
       return;
     }
+
     log.write("compiler", `Successfully linked 'program.so'.`);
 
     sync();
@@ -264,10 +282,6 @@ const Main = () => {
     if (!editor || !llvm || !fs || !compiler || !sysrootLoaded) {
       return;
     }
-
-    try {
-      fs.unlink("/project/test.o");
-    } catch { }
 
     const getSourceFileNames = (node: any): string[] => {
       const names = [];
@@ -287,48 +301,55 @@ const Main = () => {
     const root = fs.lookupPath("/project", {}).node;
     const sourceFileNames = getSourceFileNames(root);
 
-    const compilerArgs = [
-      "-Werror",
-      "-O2",
-      "-fno-builtin",
-      "-std=c17",
-      "-isystem/usr/include/clang",
-      "-isystem/usr/include/solana",
-      "-mrelocation-model",
-      "pic",
-      "-pic-level",
-      "2",
-      "-emit-obj",
-      "-I/project/",
-      "-triple",
-      "wasm32-unknown-unknown",
-      "-DALON_TEST",
-      "-o",
-      "/project/test.o",
-    ]
-
     for (const sourceFileName of sourceFileNames) {
-      compilerArgs.push(sourceFileName);
-    }
+      const compilerArgs = [
+        "-Werror",
+        "-O2",
+        "-fno-builtin",
+        "-std=c17",
+        "-isystem/usr/include/clang",
+        "-isystem/usr/include/solana",
+        "-mrelocation-model",
+        "pic",
+        "-pic-level",
+        "2",
+        "-emit-obj",
+        "-I/project/",
+        "-triple",
+        "wasm32-unknown-unknown",
+        "-DALON_TEST",
+        "-o",
+        "/project/test.o",
+      ]
 
-    const compilerArgsList = new llvm.StringList();
-    compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
+      compilerArgs.push("-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName);
 
-    log.write("compiler", "Compiling tests with arguments:")
-    log.write("compiler", compilerArgs);
+      const compilerArgsList = new llvm.StringList();
+      compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
 
-    const compileResult = await compiler.compile(compilerArgsList);
-    if (!compileResult.success) {
-      log.write("compiler", "Error while compiling tests:");
-      log.write("compiler", compileResult.diags);
-      return;
+      log.write("compiler", "Compiling tests with arguments:")
+      log.write("compiler", compilerArgs);
+
+      const compileResult = await compiler.compile(compilerArgsList);
+      if (!compileResult.success) {
+        log.write("compiler", "Error while compiling tests:");
+        log.write("compiler", compileResult.diags);
+
+        for (const sourceFileName of sourceFileNames) {
+          try {
+            fs.unlink(`${sourceFileName.slice(0, -2)}.o`);
+          } catch { }
+        }
+
+        return;
+      }
+
+      log.write("compiler", `Successfully compiled '${sourceFileName.slice(0, -2)}.o'.`);
     }
 
     try {
       fs.unlink("/project/test.wasm");
     } catch { }
-
-    log.write("compiler", `Successfully compiled 'test.o'.`);
 
     const linkerArgs = [
       "--no-entry",
@@ -337,8 +358,11 @@ const Main = () => {
       "--allow-undefined",
       "-o",
       "/project/test.wasm",
-      "/project/test.o",
     ];
+
+    for (const sourceFileName of sourceFileNames) {
+      linkerArgs.push(`${sourceFileName.slice(0, -2)}.o`);
+    }
 
     const linkerArgsList = new llvm.StringList();
     linkerArgs.forEach(arg => linkerArgsList.push_back(arg));
@@ -347,6 +371,13 @@ const Main = () => {
     log.write("compiler", linkerArgs);
 
     const linkResult = await compiler.linkWasm(linkerArgsList);
+
+    for (const sourceFileName of sourceFileNames) {
+      try {
+        fs.unlink(`${sourceFileName.slice(0, -2)}.o`);
+      } catch { }
+    }
+
     if (!linkResult.success) {
       log.write("compiler", "Error while linking tests:");
       log.write("compiler", linkResult.err);
@@ -355,6 +386,10 @@ const Main = () => {
     log.write("compiler", `Successfully linked 'test.wasm'.`);
 
     const bytes = fs.readFile("/project/test.wasm");
+
+    try {
+      fs.unlink(`/project/test.wasm`);
+    } catch { }
 
     const memory = new WebAssembly.Memory({ initial: 2 });
     const buffer = new Uint8Array(memory.buffer);
@@ -465,7 +500,6 @@ const Main = () => {
         },
       }
     });
-
 
     const tests = Object.entries(instance.exports).filter(([key,]) => key.startsWith("test_"));
 

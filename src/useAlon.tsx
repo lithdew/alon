@@ -19,13 +19,16 @@ export const useExampleCode = (editor: monaco.editor.IStandaloneCodeEditor | nul
 
         log.write("alon", "It looks like you do not have a project set up yet. Downloading example project code...");
 
-        const response = await fetch("/examples/example.c");
-        const code = await response.text();
-        fs.writeFile("/project/example.c", code);
+        await Promise.all(["example_memo.c", "example_sdk.c"].map(async fileName => {
+            const response = await fetch(`/examples/${fileName}`);
+            const code = await response.text();
+            fs.writeFile(`/project/${fileName}`, code);
+        }));
 
-        const uri = monaco.Uri.file("/project/example.c");
+        const uri = monaco.Uri.file("/project/example_memo.c");
         let model = monaco.editor.getModel(uri)
         if (model === null) {
+            const code = new TextDecoder().decode(fs.readFile("/project/example_memo.c"));
             model = monaco.editor.createModel(code, undefined, uri);
         }
         editor.setModel(model);
