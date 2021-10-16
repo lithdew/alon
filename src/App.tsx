@@ -207,7 +207,7 @@ const Main = () => {
     log.write("compiler", "Compiling with arguments:")
     log.write("compiler", baseCompilerArgs);
 
-    await Promise.all(sourceFileNames.map(async sourceFileName => {
+    for (const sourceFileName of sourceFileNames) {
       const compilerArgs = [...baseCompilerArgs, "-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName];
 
       const compilerArgsList = new llvm.StringList();
@@ -226,7 +226,7 @@ const Main = () => {
 
         return;
       }
-    }));
+    }
 
     try {
       fs.unlink("/project/program.so");
@@ -318,7 +318,7 @@ const Main = () => {
     log.write("compiler", "Compiling tests with arguments:")
     log.write("compiler", baseCompilerArgs);
 
-    await Promise.all(sourceFileNames.map(async sourceFileName => {
+    for (const sourceFileName of sourceFileNames) {
       const compilerArgs = [...baseCompilerArgs, "-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName];
 
       const compilerArgsList = new llvm.StringList();
@@ -337,7 +337,7 @@ const Main = () => {
 
         return;
       }
-    }));
+    }
 
     try {
       fs.unlink("/project/test.wasm");
