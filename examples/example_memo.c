@@ -11,6 +11,7 @@
 
 void broadcast_memo(SolParameters *params);
 
+// The main entrypoint of the memo program.
 uint64_t entrypoint(const uint8_t *input)
 {
   // Load 2 accounts.
