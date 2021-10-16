@@ -3,7 +3,7 @@
 // Note that the entrypoint of the Solana program in Alon must be a function with
 // the following signature: `uint64_t entrypoint(const uint8_t *input)`.
 
-#include <example_lottery.h>
+#include "example_lottery.h"
 
 // Set of all possible instruction opcode for this lottery program.
 
