@@ -5,7 +5,7 @@
 
 #include "example_lottery.h"
 
-// Set of all possible instruction opcode for this lottery program.
+// Set of all possible instruction opcodes for this lottery program.
 
 #define CMD_CREATE (0)
 #define CMD_BUY (1)
