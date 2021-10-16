@@ -19,7 +19,7 @@ export const useExampleCode = (editor: monaco.editor.IStandaloneCodeEditor | nul
 
         log.write("alon", "It looks like you do not have a project set up yet. Downloading example project code...");
 
-        await Promise.all(["example_memo.c", "example_sdk.c"].map(async fileName => {
+        await Promise.all(["example_memo.c", "example_lottery.c", "example_lottery.h", "example_sdk.c"].map(async fileName => {
             const response = await fetch(`/examples/${fileName}`);
             const code = await response.text();
             fs.writeFile(`/project/${fileName}`, code);

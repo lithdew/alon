@@ -16,8 +16,12 @@ window.fetch = function () {
     arguments[0] = process.env.PUBLIC_URL + "/clang-solana-bpf.wasm";
   } else if (arguments[0].endsWith("/examples/example_memo.c")) {
     arguments[0] = process.env.PUBLIC_URL + "/examples/example_memo.c";
-  } if (arguments[0].endsWith("/examples/example_sdk.c")) {
+  } else if (arguments[0].endsWith("/examples/example_sdk.c")) {
     arguments[0] = process.env.PUBLIC_URL + "/examples/example_sdk.c";
+  } else if (arguments[0].endsWith("/examples/example_lottery.c")) {
+    arguments[0] = process.env.PUBLIC_URL + "/examples/example_lottery.c";
+  } else if (arguments[0].endsWith("/examples/example_lottery.h")) {
+    arguments[0] = process.env.PUBLIC_URL + "/examples/example_lottery.h";
   }
   return fetch.apply(window, arguments);
 };

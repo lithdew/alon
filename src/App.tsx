@@ -187,33 +187,31 @@ const Main = () => {
     const root = fs.lookupPath("/project", {}).node;
     const sourceFileNames = getSourceFileNames(root);
 
-    for (const sourceFileName of sourceFileNames) {
-      const compilerArgs = [
-        "-Werror",
-        "-O2",
-        "-fno-builtin",
-        "-std=c17",
-        "-isystem/usr/include/clang",
-        "-isystem/usr/include/solana",
-        "-mrelocation-model",
-        "pic",
-        "-pic-level",
-        "2",
-        "-emit-obj",
-        "-I/project/",
-        "-triple",
-        "bpfel-unknown-unknown-bpfel+solana",
-        "-o",
-        "/project/program.o",
-      ]
+    const baseCompilerArgs = [
+      "-Werror",
+      "-O2",
+      "-fno-builtin",
+      "-std=c17",
+      "-isystem/usr/include/clang",
+      "-isystem/usr/include/solana",
+      "-mrelocation-model",
+      "pic",
+      "-pic-level",
+      "2",
+      "-emit-obj",
+      "-I/project/",
+      "-triple",
+      "bpfel-unknown-unknown-bpfel+solana",
+    ];
 
-      compilerArgs.push("-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName);
+    log.write("compiler", "Compiling with arguments:")
+    log.write("compiler", baseCompilerArgs);
+
+    await Promise.all(sourceFileNames.map(async sourceFileName => {
+      const compilerArgs = [...baseCompilerArgs, "-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName];
 
       const compilerArgsList = new llvm.StringList();
       compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
-
-      log.write("compiler", "Compiling with arguments:")
-      log.write("compiler", compilerArgs);
 
       const compileResult = await compiler.compile(compilerArgsList);
       if (!compileResult.success) {
@@ -228,9 +226,7 @@ const Main = () => {
 
         return;
       }
-
-      log.write("compiler", `Successfully compiled '${sourceFileName.slice(0, -2)}.o'.`);
-    }
+    }));
 
     try {
       fs.unlink("/project/program.so");
@@ -301,34 +297,32 @@ const Main = () => {
     const root = fs.lookupPath("/project", {}).node;
     const sourceFileNames = getSourceFileNames(root);
 
-    for (const sourceFileName of sourceFileNames) {
-      const compilerArgs = [
-        "-Werror",
-        "-O2",
-        "-fno-builtin",
-        "-std=c17",
-        "-isystem/usr/include/clang",
-        "-isystem/usr/include/solana",
-        "-mrelocation-model",
-        "pic",
-        "-pic-level",
-        "2",
-        "-emit-obj",
-        "-I/project/",
-        "-triple",
-        "wasm32-unknown-unknown",
-        "-DALON_TEST",
-        "-o",
-        "/project/test.o",
-      ]
+    const baseCompilerArgs = [
+      "-Werror",
+      "-O2",
+      "-fno-builtin",
+      "-std=c17",
+      "-isystem/usr/include/clang",
+      "-isystem/usr/include/solana",
+      "-mrelocation-model",
+      "pic",
+      "-pic-level",
+      "2",
+      "-emit-obj",
+      "-I/project/",
+      "-triple",
+      "wasm32-unknown-unknown",
+      "-DALON_TEST",
+    ];
 
-      compilerArgs.push("-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName);
+    log.write("compiler", "Compiling tests with arguments:")
+    log.write("compiler", baseCompilerArgs);
+
+    await Promise.all(sourceFileNames.map(async sourceFileName => {
+      const compilerArgs = [...baseCompilerArgs, "-o", `${sourceFileName.slice(0, -2)}.o`, sourceFileName];
 
       const compilerArgsList = new llvm.StringList();
       compilerArgs.forEach(arg => compilerArgsList.push_back(arg));
-
-      log.write("compiler", "Compiling tests with arguments:")
-      log.write("compiler", compilerArgs);
 
       const compileResult = await compiler.compile(compilerArgsList);
       if (!compileResult.success) {
@@ -343,9 +337,7 @@ const Main = () => {
 
         return;
       }
-
-      log.write("compiler", `Successfully compiled '${sourceFileName.slice(0, -2)}.o'.`);
-    }
+    }));
 
     try {
       fs.unlink("/project/test.wasm");
@@ -391,6 +383,8 @@ const Main = () => {
       fs.unlink(`/project/test.wasm`);
     } catch { }
 
+    console.log("LINKED");
+
     const memory = new WebAssembly.Memory({ initial: 2 });
     const buffer = new Uint8Array(memory.buffer);
 
@@ -400,123 +394,137 @@ const Main = () => {
 
     const blake3 = await import("blake3/browser");
 
-    const { instance } = await WebAssembly.instantiate(bytes, {
-      env: {
-        memory,
-        sol_panic_(file: number, len: number, line: number, column: number) {
-          throw new Error(`Panic in ${new TextDecoder().decode(slice(file, len))} at ${line}:${column}`);
-        },
-        sol_log_(ptr: number, len: number) {
-          log.write("compiler", `Program log: ${new TextDecoder().decode(slice(ptr, len))}`);
-        },
-        sol_log_64_(a: number, b: number, c: number, d: number, e: number) {
-          log.write("compiler", `Program log: ${a}, ${b}, ${c}, ${d}, ${e}`);
-        },
-        sol_log_compute_units_() {
-          log.write("compiler", `Program consumption: __ units remaining`);
-        },
-        sol_log_pubkey(ptr: number) {
-          log.write("compiler", `Program log: ${new web3.PublicKey(slice(ptr, 32)).toBase58()}`);
-        },
-        sol_create_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number) {
-          let payload = Buffer.of();
-          for (let i = 0; i < seeds_len; i++) {
-            const view = new DataView(buffer.buffer, seeds + i * 16, 16);
-            payload = Buffer.concat([payload, Buffer.from(slice(view.getUint32(0, true), view.getUint32(8, true)))]);
-          }
-          payload = Buffer.concat([payload, Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
+    console.log("BEFORE");
 
-          const hasher = new SHA("SHA-256", "UINT8ARRAY");
-          hasher.update(payload);
-
-          const hash = hasher.getHash("UINT8ARRAY");
-          if (web3.PublicKey.isOnCurve(hash)) {
-            return BigInt(1);
-          }
-
-          buffer.set(hash, program_address);
-
-          return BigInt(0);
-        },
-        sol_try_find_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number, bump_seed: number) {
-          for (let nonce = 255; nonce > 0; nonce--) {
+    try {
+      const { instance } = await WebAssembly.instantiate(bytes, {
+        env: {
+          memory,
+          sol_panic_(file: number, len: number, line: number, column: number) {
+            throw new Error(`Panic in ${new TextDecoder().decode(slice(file, len))} at ${line}:${column}`);
+          },
+          sol_log_(ptr: number, len: number) {
+            log.write("compiler", `Program log: ${new TextDecoder().decode(slice(ptr, len))}`);
+          },
+          sol_log_64_(a: number, b: number, c: number, d: number, e: number) {
+            log.write("compiler", `Program log: ${a}, ${b}, ${c}, ${d}, ${e}`);
+          },
+          sol_log_compute_units_() {
+            log.write("compiler", `Program consumption: __ units remaining`);
+          },
+          sol_log_pubkey(ptr: number) {
+            log.write("compiler", `Program log: ${new web3.PublicKey(slice(ptr, 32)).toBase58()}`);
+          },
+          sol_create_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number) {
             let payload = Buffer.of();
             for (let i = 0; i < seeds_len; i++) {
               const view = new DataView(buffer.buffer, seeds + i * 16, 16);
               payload = Buffer.concat([payload, Buffer.from(slice(view.getUint32(0, true), view.getUint32(8, true)))]);
             }
-            payload = Buffer.concat([payload, Buffer.of(nonce), Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
+            payload = Buffer.concat([payload, Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
 
             const hasher = new SHA("SHA-256", "UINT8ARRAY");
             hasher.update(payload);
 
             const hash = hasher.getHash("UINT8ARRAY");
-            if (!web3.PublicKey.isOnCurve(hash)) {
-              buffer.set(hash, program_address);
-              buffer.set([nonce], bump_seed);
-              return BigInt(0);
+            if (web3.PublicKey.isOnCurve(hash)) {
+              return BigInt(1);
             }
-          }
-          return BigInt(1);
-        },
-        sol_sha256: (bytes: number, bytes_len: number, result_ptr: number) => {
-          const hasher = new SHA("SHA-256", "UINT8ARRAY");
-          for (let i = 0; i < bytes_len; i++) {
-            // A slice is assumed to be 16 bytes.
-            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
-            // 8 is a 4-byte LE number depicting the slice's length.
-            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
-            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
-          }
 
-          buffer.set(hasher.getHash("UINT8ARRAY"), result_ptr);
-          return BigInt(0);
-        },
-        sol_keccak256: (bytes: number, bytes_len: number, result_ptr: number) => {
-          const hasher = sha3.keccak256.create();
-          for (let i = 0; i < bytes_len; i++) {
-            // A slice is assumed to be 16 bytes.
-            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
-            // 8 is a 4-byte LE number depicting the slice's length.
-            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
-            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
-          }
+            buffer.set(hash, program_address);
 
-          buffer.set(hasher.digest(), result_ptr);
-          return BigInt(0);
-        },
-        sol_blake3: (bytes: number, bytes_len: number, result_ptr: number) => {
-          const hasher = blake3.createHash();
-          for (let i = 0; i < bytes_len; i++) {
-            // A slice is assumed to be 16 bytes.
-            // Offset 0 is a 4-byte LE number depicting the slice's pointer.
-            // 8 is a 4-byte LE number depicting the slice's length.
-            const view = new DataView(buffer.buffer, bytes + i * 16, 16);
-            hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
-          }
+            return BigInt(0);
+          },
+          sol_try_find_program_address(seeds: number, seeds_len: number, program_id: number, program_address: number, bump_seed: number) {
+            for (let nonce = 255; nonce > 0; nonce--) {
+              let payload = Buffer.of();
+              for (let i = 0; i < seeds_len; i++) {
+                const view = new DataView(buffer.buffer, seeds + i * 16, 16);
+                payload = Buffer.concat([payload, Buffer.from(slice(view.getUint32(0, true), view.getUint32(8, true)))]);
+              }
+              payload = Buffer.concat([payload, Buffer.of(nonce), Buffer.from(slice(program_id, 32)), Buffer.from("ProgramDerivedAddress")]);
 
-          buffer.set(hasher.digest(), result_ptr);
-          return BigInt(0);
-        },
+              const hasher = new SHA("SHA-256", "UINT8ARRAY");
+              hasher.update(payload);
+
+              const hash = hasher.getHash("UINT8ARRAY");
+              if (!web3.PublicKey.isOnCurve(hash)) {
+                buffer.set(hash, program_address);
+                buffer.set([nonce], bump_seed);
+                return BigInt(0);
+              }
+            }
+            return BigInt(1);
+          },
+          sol_sha256: (bytes: number, bytes_len: number, result_ptr: number) => {
+            const hasher = new SHA("SHA-256", "UINT8ARRAY");
+            for (let i = 0; i < bytes_len; i++) {
+              // A slice is assumed to be 16 bytes.
+              // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+              // 8 is a 4-byte LE number depicting the slice's length.
+              const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+              hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+            }
+
+            buffer.set(hasher.getHash("UINT8ARRAY"), result_ptr);
+            return BigInt(0);
+          },
+          sol_keccak256: (bytes: number, bytes_len: number, result_ptr: number) => {
+            const hasher = sha3.keccak256.create();
+            for (let i = 0; i < bytes_len; i++) {
+              // A slice is assumed to be 16 bytes.
+              // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+              // 8 is a 4-byte LE number depicting the slice's length.
+              const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+              hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+            }
+
+            buffer.set(hasher.digest(), result_ptr);
+            return BigInt(0);
+          },
+          sol_blake3: (bytes: number, bytes_len: number, result_ptr: number) => {
+            const hasher = blake3.createHash();
+            for (let i = 0; i < bytes_len; i++) {
+              // A slice is assumed to be 16 bytes.
+              // Offset 0 is a 4-byte LE number depicting the slice's pointer.
+              // 8 is a 4-byte LE number depicting the slice's length.
+              const view = new DataView(buffer.buffer, bytes + i * 16, 16);
+              hasher.update(slice(view.getUint32(0, true), view.getUint32(8, true)));
+            }
+
+            buffer.set(hasher.digest(), result_ptr);
+            return BigInt(0);
+          },
+          sol_invoke_signed_c: (_instruction: any, _account_infos: any, _account_infos_len: any, _signer_seeds: any, _signer_seeds_len: any) => {
+            return BigInt(0);
+          },
+          sol_alloc_free_: (size: BigInt, ptr: number) => {
+
+          }
+        }
+      });
+
+      console.log("AFTER");
+
+      const tests = Object.entries(instance.exports).filter(([key,]) => key.startsWith("test_"));
+
+      let count = 1;
+      for (const [testName, testFunction] of tests) {
+        const formattedTestName = testName.substring("test_".length).replace("__", "::");
+
+        try {
+          // @ts-ignore
+          testFunction();
+          log.write("compiler", `\u001b[32m[${count}/${tests.length}] ${formattedTestName} ✓ success!\u001b[0m\n`);
+        } catch (err) {
+          // @ts-ignore
+          log.write("compiler", `\u001b[31m[${count}/${tests.length}] ${formattedTestName} ✗ failed\u001b[0m\n\n${err.stack}`);
+        }
+
+        count += 1;
       }
-    });
-
-    const tests = Object.entries(instance.exports).filter(([key,]) => key.startsWith("test_"));
-
-    let count = 1;
-    for (const [testName, testFunction] of tests) {
-      const formattedTestName = testName.substring("test_".length).replace("__", "::");
-
-      try {
-        // @ts-ignore
-        testFunction();
-        log.write("compiler", `\u001b[32m[${count}/${tests.length}] ${formattedTestName} ✓ success!\u001b[0m\n`);
-      } catch (err) {
-        // @ts-ignore
-        log.write("compiler", `\u001b[31m[${count}/${tests.length}] ${formattedTestName} ✗ failed\u001b[0m\n\n${err.stack}`);
-      }
-
-      count += 1;
+    } catch (err) {
+      console.error(err);
     }
 
     sync();
@@ -640,6 +648,17 @@ const Main = () => {
 
     fs.writeFile(model.uri.path, newCode);
 
+    if (autoRunTests) {
+      if (autoRunTestTimeoutHandle.current) {
+        clearTimeout(autoRunTestTimeoutHandle.current);
+      }
+      autoRunTestTimeoutHandle.current = setTimeout(() => {
+        if (isMounted()) {
+          handleClickRunTests();
+        }
+      }, 250) as any;
+    }
+
     if (!tree) {
       const newTree = parser.parse(newCode);
       markEditorErrors(newTree, editor);
@@ -663,17 +682,6 @@ const Main = () => {
           oldEndPosition: { row: oldEndPosition.lineNumber, column: oldEndPosition.column },
           newEndPosition: { row: newEndPosition.lineNumber, column: newEndPosition.column },
         });
-
-        if (autoRunTests) {
-          if (autoRunTestTimeoutHandle.current) {
-            clearTimeout(autoRunTestTimeoutHandle.current);
-          }
-          autoRunTestTimeoutHandle.current = setTimeout(() => {
-            if (isMounted()) {
-              handleClickRunTests();
-            }
-          }, 500) as any;
-        }
       }
 
       const newTree = parser.parse(newCode, tree);
