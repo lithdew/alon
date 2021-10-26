@@ -12,7 +12,7 @@ Integrating Treesitter into Alon's code editor allows for the development of all
 
 ### Seeing is believing
 
-A live demo of Alon may be test run here: [beta.medadnewman.co.uk/alon/](http://beta.medadnewman.co.uk/alon/)
+A live demo of Alon may be test run here: [lithdew.github.io/alon/](https://lithdew.github.io/alon/)
 
 ![](images/demo.png)
 
