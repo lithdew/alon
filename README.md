@@ -46,6 +46,22 @@ Deploy Alon on Github Pages:
 $ yarn deploy
 ```
 
+## Deploy on docker
+
+Fire it up, building from your local respository with:
+```bash
+docker-compose up
+```
+
+Otherwise, you can run a pre built image from dockerhub. Pull and run from dockerhub with the following command:
+
+```bash
+$ docker run -d  --name alon -p 80:80 medadnewman/alon_web:latest
+```
+
+It should pull the latest image and will be viewable at the `/alon` subpage(e.g. `http://localhost/alon/`)
+
+
 ## roadmap
 
 - Better code/file navigation
