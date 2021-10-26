@@ -1,0 +1,7 @@
+*
+
+!yarn-offline-mirror/
+!src/
+!package.json
+!yarn.lock
+!.yarnrc
