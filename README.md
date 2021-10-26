@@ -10,6 +10,14 @@ Integrating Treesitter into Alon's code editor allows for the development of all
 
 ## project
 
+### Seeing is believing
+
+A live demo of Alon may be test run here: [lithdew.github.io/alon/](https://lithdew.github.io/alon/)
+
+![](images/demo.png)
+
+
+
 ### Modules
 
 - Frontend: https://github.com/lithdew/alon
