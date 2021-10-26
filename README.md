@@ -56,10 +56,10 @@ docker-compose up
 Otherwise, you can run a pre built image from dockerhub. Pull and run from dockerhub with the following command:
 
 ```bash
-$ docker run  --name alon -p 80:80 medadnewman/alon_web:latest
+$ docker run -d  --name alon -p 80:80 medadnewman/alon_web:latest
 ```
 
-It should pull the latest image and will be viewable at the `/alon` subpage(e.g. `localhost/alon`)
+It should pull the latest image and will be viewable at the `/alon` subpage(e.g. `http://localhost/alon/`)
 
 
 ## roadmap
